@@ -1,107 +1,39 @@
 import gradio as gr
-import pandas as pd
-import numpy as np
-import plotly.express as px
 
-def assess_pcos_risk(handwashing, sanitation, pm25, gdp_per_capita):
-    # 基于Shapley权重计算风险
-    handwashing_score = (100 - handwashing) * 0.099
-    sanitation_score = (100 - sanitation) * 0.096
-    pm25_score = (pm25 - 5) / 45 * 100 * 0.072
-    socioeconomic_score = (80 - gdp_per_capita) / 80 * 100 * 0.05
+def assess_pcos_risk(handwashing, sanitation, pm25, gdp):
+    # Calculate risk based on a simplified formula
+    risk_score = (100 - handwashing) * 0.1 + \
+                 (100 - sanitation) * 0.1 + \
+                 (pm25 / 50) * 10 + \
+                 (25 / (gdp + 1)) * 10
     
-    risk_score = handwashing_score + sanitation_score + pm25_score + socioeconomic_score + 25
     risk_score = max(0, min(100, risk_score))
-    
+
     if risk_score < 30:
-        risk_level = " 低风险"
+        level = "🟢 Low Risk"
     elif risk_score < 60:
-        risk_level = " 中等风险"
+        level = "🟡 Moderate Risk"
     else:
-        risk_level = " 高风险"
+        level = "🔴 High Risk"
     
-    ci_lower = max(0, risk_score - 7)
-    ci_upper = min(100, risk_score + 7)
-    
-    # 创建贡献图
-    factor_contributions = {
-        '缺乏洗手设施': handwashing_score,
-        '不安全卫生设施': sanitation_score,
-        'PM2.5环境暴露': pm25_score,
-        '社会经济因素': socioeconomic_score
-    }
-    
-    fig = px.bar(
-        x=list(factor_contributions.values()),
-        y=list(factor_contributions.keys()),
-        orientation='h',
-        title="各风险因素对PCOS风险的贡献",
-        color=list(factor_contributions.values()),
-        color_continuous_scale='Reds'
-    )
-    
-    result_summary = f"""
-##  PCOS风险评估结果
+    result = f"**Risk Score:** {risk_score:.1f} / 100\n\n**Risk Level:** {level}"
+    return result
 
-###  核心指标
-- **风险评分**: {risk_score:.1f}/100
-- **风险等级**: {risk_level}
-- **置信区间**: {ci_lower:.1f} - {ci_upper:.1f} (95% CI)
-- **模型验证R**: 0.847 (基于247国家, 32年数据)
+# Create the Gradio interface
+iface = gr.Interface(
+    fn=assess_pcos_risk,
+    inputs=[
+        gr.Slider(0, 100, value=85, label="Handwashing Facilities Coverage (%)"),
+        gr.Slider(0, 100, value=90, label="Safe Sanitation Facilities (%)"),
+        gr.Slider(0, 50, value=15, label="PM2.5 Exposure (μg/m³)"),
+        gr.Slider(1, 100, value=25, label="GDP per Capita (in thousands USD)")
+    ],
+    outputs=gr.Markdown(label="Assessment Results"),
+    title="🔬 PCOS Environmental Health Risk Assessment Tool",
+    description="A simplified tool to assess PCOS risk based on environmental factors. Based on GBD research.",
+    theme=gr.themes.Soft()
+)
 
-###  关键发现
-- 环境因素解释了 **42.3%** 的国家间PCOS差异
-- 最重要因素: 洗手设施(9.9%) > 卫生设施(9.6%) > PM2.5(7.2%)
-
-###  政策建议
-"""
-    
-    if handwashing < 90:
-        result_summary += f" 改善洗手设施覆盖 (预期降低风险 {(90-handwashing)*0.099:.1f} 分)\n"
-    if sanitation < 95:
-        result_summary += f" 提升安全卫生设施 (预期降低风险 {(95-sanitation)*0.096:.1f} 分)\n"
-    if pm25 > 15:
-        result_summary += f" 控制PM2.5污染 (预期降低风险 {(pm25-15)/45*100*0.072:.1f} 分)\n"
-    
-    if handwashing >= 90 and sanitation >= 95 and pm25 <= 15:
-        result_summary += " 当前环境条件良好，继续保持现有政策\n"
-    
-    return result_summary, fig
-
-with gr.Blocks(title="PCOS环境健康风险评估工具") as demo:
-    gr.Markdown("""
-    #  PCOS环境健康风险评估工具
-    ## 基于247国家真实GBD数据的科学评估平台 (1990-2021)
-    """)
-    
-    with gr.Row():
-        with gr.Column():
-            handwashing = gr.Slider(0, 100, 85, label=" 洗手设施覆盖率 (%)")
-            sanitation = gr.Slider(0, 100, 90, label=" 安全卫生设施覆盖率 (%)")
-        with gr.Column():
-            pm25 = gr.Slider(5, 50, 15, label=" PM2.5年均暴露浓度 (μg/m)")
-            gdp_per_capita = gr.Slider(1, 80, 25, label=" 人均GDP (千美元, PPP)")
-    
-    assess_btn = gr.Button(" 开始PCOS风险评估", variant="primary")
-    
-    with gr.Row():
-        result_text = gr.Markdown()
-        contrib_plot = gr.Plot()
-    
-    assess_btn.click(
-        fn=assess_pcos_risk,
-        inputs=[handwashing, sanitation, pm25, gdp_per_capita],
-        outputs=[result_text, contrib_plot]
-    )
-    
-    gr.Markdown("""
-    ---
-    ##  研究基础
-    - **数据覆盖**: 247个国家，32年时间序列 (1990-2021)
-    - **验证精度**: 时间R=0.847, 空间R=0.823
-    - **GitHub**: shizhf999/pcos-environmental-health-tool
-    """)
-
+# Launch the app
 if __name__ == "__main__":
-    demo.launch(server_name="0.0.0.0", server_port=7860, share=True)
-
+    iface.launch()
