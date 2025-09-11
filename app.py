@@ -1,5 +1,3 @@
-﻿#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 PCOS科学应用 - 基于真实GBD研究数据
 """
@@ -71,3 +69,4 @@ if __name__ == '__main__':
     print(" 验证：时间R=0.847, 空间R=0.823")
     print(" 访问地址：http://localhost:5000")
     app.run(debug=True, host='0.0.0.0', port=5000)
+
