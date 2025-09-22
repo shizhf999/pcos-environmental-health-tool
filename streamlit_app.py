@@ -15,6 +15,22 @@ from plotly.subplots import make_subplots
 import folium
 from streamlit_folium import st_folium
 
+# 安全图表创建函数
+def safe_plotly_chart(fig, error_message="图表创建失败", fallback_data=None):
+    """安全显示Plotly图表的函数"""
+    try:
+        if fig is not None:
+            st.plotly_chart(fig, use_container_width=True)
+            return True
+        else:
+            st.error(error_message)
+            return False
+    except Exception as e:
+        st.error(f"{error_message}: {str(e)}")
+        if fallback_data is not None:
+            st.dataframe(fallback_data)
+        return False
+
 # Page configuration
 st.set_page_config(
     page_title="PCOS Global Environmental Atlas",
@@ -125,17 +141,26 @@ if page == "🌐 Global Overview":
     # Global map
     st.subheader("🗺️ Global PCOS Burden Distribution")
     
-    fig = px.choropleth(
-        df,
-        locations="Country",
-        color="PCOS_Prevalence",
-        hover_name="Country",
-        color_continuous_scale="Reds",
-        title="PCOS Prevalence by Country (per 100,000 females)"
-    )
-    
-    fig.update_layout(height=500)
-    st.plotly_chart(fig, use_container_width=True)
+    try:
+        fig = px.choropleth(
+            df,
+            locations="Country",
+            color="PCOS_Prevalence",
+            hover_name="Country",
+            color_continuous_scale="Reds",
+            title="PCOS Prevalence by Country (per 100,000 females)"
+        )
+        
+        if fig is not None:
+            fig.update_layout(height=500)
+            safe_plotly_chart(fig, "全球地图创建失败", df[['Country', 'PCOS_Prevalence']])
+        else:
+            st.error("无法创建全球地图，请检查数据")
+    except Exception as e:
+        st.error(f"全球地图创建出错: {str(e)}")
+        # 显示简单的数据表格作为替代
+        st.markdown("**全球PCOS负担数据 (每10万女性):**")
+        st.dataframe(df[['Country', 'PCOS_Prevalence']].sort_values('PCOS_Prevalence', ascending=False))
     
     # Key findings
     st.subheader("🔑 Key Findings")
@@ -184,26 +209,35 @@ elif page == "📊 Country Analysis":
             country_data['Climate_Risk']
         ]
         
-        fig = go.Figure()
-        
-        fig.add_trace(go.Scatterpolar(
-            r=values,
-            theta=categories,
-            fill='toself',
-            name=selected_country
-        ))
-        
-        fig.update_layout(
-            polar=dict(
-                radialaxis=dict(
-                    visible=True,
-                    range=[0, 1]
-                )),
-            showlegend=True,
-            title=f"{selected_country} Environmental Health Profile"
-        )
-        
-        st.plotly_chart(fig, use_container_width=True)
+        try:
+            fig = go.Figure()
+            
+            fig.add_trace(go.Scatterpolar(
+                r=values,
+                theta=categories,
+                fill='toself',
+                name=selected_country
+            ))
+            
+            fig.update_layout(
+                polar=dict(
+                    radialaxis=dict(
+                        visible=True,
+                        range=[0, 1]
+                    )),
+                showlegend=True,
+                title=f"{selected_country} Environmental Health Profile"
+            )
+            
+            safe_plotly_chart(fig, f"{selected_country}雷达图创建失败")
+        except Exception as e:
+            st.error(f"雷达图创建出错: {str(e)}")
+            # 显示数值作为替代
+            profile_data = pd.DataFrame({
+                'Indicator': categories,
+                'Value': values
+            })
+            st.dataframe(profile_data)
     
     with col2:
         st.subheader("📈 Risk Factor Rankings")
@@ -219,9 +253,14 @@ elif page == "📊 Country Analysis":
         risk_df = pd.DataFrame(list(risk_factors.items()), columns=['Factor', 'Score'])
         risk_df = risk_df.sort_values('Score', ascending=True)
         
-        fig = px.bar(risk_df, x='Score', y='Factor', orientation='h',
-                    title="Environmental Risk Factors (Lower is Better)")
-        st.plotly_chart(fig, use_container_width=True)
+        try:
+            fig = px.bar(risk_df, x='Score', y='Factor', orientation='h',
+                        title="Environmental Risk Factors (Lower is Better)")
+            safe_plotly_chart(fig, "风险因子图表创建失败", risk_df)
+        except Exception as e:
+            st.error(f"风险因子图表创建出错: {str(e)}")
+            # 显示简单的数据表格作为替代
+            st.dataframe(risk_df)
         
         # Country recommendations
         st.subheader("💡 Policy Recommendations")
@@ -293,11 +332,22 @@ elif page == "🔮 Prediction Tool":
         
         factor_df = pd.DataFrame(list(factors.items()), columns=['Factor', 'Impact'])
         
-        fig = px.bar(factor_df, x='Factor', y='Impact',
-                    title="Factor Contributions to Predicted Burden",
-                    color='Impact', color_continuous_scale='RdYlBu_r')
-        fig.update_xaxis(tickangle=45)
-        st.plotly_chart(fig, use_container_width=True)
+        try:
+            fig = px.bar(factor_df, x='Factor', y='Impact',
+                        title="Factor Contributions to Predicted Burden",
+                        color='Impact', color_continuous_scale='RdYlBu_r')
+            if fig is not None:
+                fig.update_xaxes(tickangle=45)
+                safe_plotly_chart(fig, "因子贡献图表创建失败", factor_df)
+            else:
+                st.error("无法创建图表，请检查数据")
+        except Exception as e:
+            st.error(f"图表创建出错: {str(e)}")
+            # 显示简单的文本版本
+            st.markdown("**因子贡献分析:**")
+            for factor, impact in factors.items():
+                st.markdown(f"- {factor}: {impact:.1f}")
+        
 
 elif page == "🌡️ Climate Scenarios":
     st.header("Climate Change Impact Scenarios")
@@ -341,14 +391,24 @@ elif page == "🌡️ Climate Scenarios":
             line=dict(color='red', width=3)
         ))
     
-    fig.update_layout(
-        title=f"Projected PCOS Burden: {scenario}",
-        xaxis_title="Year",
-        yaxis_title="PCOS Prevalence (per 100,000)",
-        height=500
-    )
-    
-    st.plotly_chart(fig, use_container_width=True)
+    try:
+        fig.update_layout(
+            title=f"Projected PCOS Burden: {scenario}",
+            xaxis_title="Year",
+            yaxis_title="PCOS Prevalence (per 100,000)",
+            height=500
+        )
+        
+        safe_plotly_chart(fig, "气候场景图表创建失败")
+    except Exception as e:
+        st.error(f"气候场景图表创建出错: {str(e)}")
+        # 显示数值作为替代
+        scenario_data = pd.DataFrame({
+            'Year': years,
+            'Baseline': baseline_trend,
+            'Scenario': scenario_values
+        })
+        st.dataframe(scenario_data.tail(10))  # 显示最后10年的数据
     
     # Impact summary
     col1, col2 = st.columns(2)
@@ -403,8 +463,18 @@ elif page == "📈 Inequality Trends":
         row=2, col=1
     )
     
-    fig.update_layout(height=600, title_text="PCOS-Related Health Inequality Trends, 1990-2021")
-    st.plotly_chart(fig, use_container_width=True)
+    try:
+        fig.update_layout(height=600, title_text="PCOS-Related Health Inequality Trends, 1990-2021")
+        safe_plotly_chart(fig, "不平等趋势图表创建失败")
+    except Exception as e:
+        st.error(f"不平等趋势图表创建出错: {str(e)}")
+        # 显示数值作为替代
+        trend_data = pd.DataFrame({
+            'Year': years,
+            'Concentration_Index': concentration_index,
+            'Gini_Coefficient': gini_coefficient
+        })
+        st.dataframe(trend_data.tail(10))  # 显示最后10年的数据
     
     # Key insights
     col1, col2 = st.columns(2)
@@ -473,11 +543,19 @@ elif page == "📚 Research Data":
         
         quality_df = pd.DataFrame(quality_metrics)
         
-        fig = px.bar(quality_df, x='Metric', y='Score',
-                    title="Data Quality Assessment",
-                    color='Score', color_continuous_scale='Greens')
-        fig.update_xaxis(tickangle=45)
-        st.plotly_chart(fig, use_container_width=True)
+        try:
+            fig = px.bar(quality_df, x='Metric', y='Score',
+                        title="Data Quality Assessment",
+                        color='Score', color_continuous_scale='Greens')
+            if fig is not None:
+                fig.update_xaxes(tickangle=45)
+                safe_plotly_chart(fig, "数据质量图表创建失败", quality_df)
+            else:
+                st.error("无法创建数据质量图表，请检查数据")
+        except Exception as e:
+            st.error(f"数据质量图表创建出错: {str(e)}")
+            # 显示简单的表格版本
+            st.dataframe(quality_df)
     
     with tab2:
         st.subheader("🔬 Analytical Methodology")
